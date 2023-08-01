@@ -1,9 +1,10 @@
 import tensorflow as tf 
 import numpy as np 
 from ..layers import Downsampling
-from .poolformer_block import PoolFormerBlock
+from .metaformer_block import MetaFormerBlock
 
-class PoolFormerStage(tf.keras.Model):
+
+class MetaFormerStage(tf.keras.Model):
 
     def __init__(
             self,
@@ -21,7 +22,7 @@ class PoolFormerStage(tf.keras.Model):
             res_scale_init_value=None,
             **kwargs,
     ):
-        super(PoolFormerStage, self).__init__(**kwargs)
+        super(MetaFormerStage, self).__init__(**kwargs)
 
         #self.grad_checkpointing = False
         self.use_nchw = True
@@ -37,7 +38,7 @@ class PoolFormerStage(tf.keras.Model):
             norm_layer=downsample_norm,
         )
 
-        self.blocks = ([PoolFormerBlock(
+        self.blocks = ([MetaFormerBlock(
             projection_dims=out_chs,
             token_mixer=token_mixer,
             mlp_act=mlp_act,
@@ -69,7 +70,7 @@ class PoolFormerStage(tf.keras.Model):
         return x
 
     def get_config(self):
-        config = super(PoolFormerStage, self).get_config()
+        config = super(MetaFormerStage, self).get_config()
 
         config["in_chs"] = self.in_chs
         config['out_chs'] = self.out_chs
