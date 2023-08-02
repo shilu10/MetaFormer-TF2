@@ -184,6 +184,81 @@ def modify_poolformerv2_stage(stage, stage_indx, pt_model_dict):
       )
 
 
+def modify_identity_rand_former_stage(stage, stage_indx, pt_model_dict):
+  block_indx = 0
+  for block in stage.layers:
+    pt_block_name = f"stages.{stage_indx}.{block_indx}"
+
+    if isinstance(block, MetaFormerBlock):
+      # normalization
+      block.norm1 = modify_tf_block(
+          tf_component = block.norm1,
+          pt_weight = pt_model_dict[f"{pt_block_name}.norm1.weight"],
+          #pt_bias = pt_model_dict[f"{pt_block_name}.norm1.bias"]
+      )
+
+      block.norm2 = modify_tf_block(
+          tf_component = block.norm2,
+          pt_weight = pt_model_dict[f"{pt_block_name}.norm2.weight"],
+          #pt_bias = pt_model_dict[f"{pt_block_name}.norm2.bias"]
+      )
+
+      # mlp layer
+      arr = np.expand_dims(pt_model_dict[f"{pt_block_name}.mlp.fc1.weight"], axis=-1)
+      arr = np.expand_dims(arr, axis=-1)
+      block.mlp.fc1 = modify_tf_block(
+          tf_component = block.mlp.fc1,
+          pt_weight = arr,
+          #pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc1.bias"]
+      )
+
+      arr = np.expand_dims(pt_model_dict[f"{pt_block_name}.mlp.fc2.weight"], axis=-1)
+      arr = np.expand_dims(arr, axis=-1)
+      block.mlp.fc2 = modify_tf_block(
+          tf_component = block.mlp.fc2,
+          pt_weight = arr,
+          #pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc2.bias"]
+      )
+
+      # mlp act scale and bias
+      block.mlp.act.scale.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.scale"]))
+      block.mlp.act.bias.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.bias"]))
+
+      # res_scale and layer_scale
+      
+      if (block.res_scale_1) is not None:
+        block.res_scale_1.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.res_scale1.scale"]))
+
+      if (block.res_scale_2) is not None:
+        block.res_scale_2.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.res_scale2.scale"]))
+
+      if (block.layer_scale_1) is not None:
+        block.layer_scale_1.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.layer_scale1.scale"]))
+
+      if (block.layer_scale_2) is not None:
+        block.layer_scale_2.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.layer_scale2.scale"]))
+
+      # random mixing for randformer
+      if (block.token_mixer != tf.identity) and isinstance(block.token_mixer, RandomMixing):
+        block.token_mixer.random_matrix.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.token_mixer.random_matrix"]))
+
+      block_indx += 1
+
+    if isinstance(block, Downsampling):
+      block.conv = modify_tf_block(
+          tf_component = block.conv,
+          pt_weight = pt_model_dict[f"downsample_layers.{stage_indx}.conv.weight"],
+          pt_bias = pt_model_dict[f"downsample_layers.{stage_indx}.conv.bias"]
+      )
+
+      block.norm = modify_tf_block(
+          tf_component = block.norm,
+          pt_weight = pt_model_dict[f"downsample_layers.{stage_indx}.pre_norm.weight"],
+         # pt_bias = pt_model_dict[f"stages.{stage_indx}.downsample.norm.bias"]
+      )
+
+
+
 def modify_poolformerv2(tf_model, pt_model_dict):
 
   # patch embed (stem) conv and norm
@@ -217,6 +292,39 @@ def modify_poolformerv2(tf_model, pt_model_dict):
   for idx, stage in enumerate(tf_model.layers[1: 1+4]):
     modify_poolformerv2_stage(stage, idx, pt_model_dict)
 
+
+def modify_identity_rand_former(tf_model, pt_model_dict):
+  # patch embed (stem) conv and norm
+
+  tf_model.layers[0].conv = modify_tf_block(
+            tf_component = tf_model.layers[0].conv,
+            pt_weight = pt_model_dict["downsample_layers.0.conv.weight"],
+            pt_bias = pt_model_dict["downsample_layers.0.conv.bias"]
+        )
+
+  tf_model.layers[0].norm = modify_tf_block(
+            tf_component = tf_model.layers[0].norm,
+            pt_weight = pt_model_dict["downsample_layers.0.post_norm.weight"],
+            #pt_bias = pt_model_dict["stem.conv.bias"]
+        )
+
+  # main norm
+  tf_model.layers[-3] = modify_tf_block(
+            tf_component = tf_model.layers[-3],
+            pt_weight = pt_model_dict["norm.weight"],
+            pt_bias = pt_model_dict["norm.bias"]
+        )
+
+  # head
+  tf_model.layers[-1] = modify_tf_block(
+            tf_component = tf_model.layers[-1],
+            pt_weight = pt_model_dict["head.weight"],
+            pt_bias = pt_model_dict["head.bias"]
+        )
+  
+  # modify identity and rand former stages
+  for idx, stage in enumerate(tf_model.layers[1: 1+4]):
+    modify_identity_rand_former_stage(stage, idx, pt_model_dict)
 
 
 def make_model_res_file(fpath):
