@@ -117,8 +117,8 @@ def port_weights(model_type="poolformer_s12",
     print(f"TensorFlow model serialized at: {save_path}...")
 
 
-def modify_metaformer_stage(stage, stage_indx, pt_model_dict):
-
+def modify_poolformerv2_stage(stage, stage_indx, pt_model_dict):
+  
   block_indx = 0
   for block in stage.layers:
     pt_block_name = f"stages.{stage_indx}.blocks.{block_indx}"
@@ -128,37 +128,31 @@ def modify_metaformer_stage(stage, stage_indx, pt_model_dict):
       block.norm1 = modify_tf_block(
           tf_component = block.norm1,
           pt_weight = pt_model_dict[f"{pt_block_name}.norm1.weight"],
-          pt_bias = pt_model_dict[f"{pt_block_name}.norm1.bias"]
+          #pt_bias = pt_model_dict[f"{pt_block_name}.norm1.bias"]
       )
-      #block.norm1.beta = None
-
-      #print(block.norm1.beta)
 
       block.norm2 = modify_tf_block(
           tf_component = block.norm2,
           pt_weight = pt_model_dict[f"{pt_block_name}.norm2.weight"],
-          pt_bias = pt_model_dict[f"{pt_block_name}.norm2.bias"]
+          #pt_bias = pt_model_dict[f"{pt_block_name}.norm2.bias"]
       )
-      #block.norm2.beta = None
 
       # mlp layer
       block.mlp.fc1 = modify_tf_block(
           tf_component = block.mlp.fc1,
           pt_weight = pt_model_dict[f"{pt_block_name}.mlp.fc1.weight"],
-          pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc1.bias"]
+          #pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc1.bias"]
       )
-      #block.mlp.fc1.bias = None
 
       block.mlp.fc2 = modify_tf_block(
           tf_component = block.mlp.fc2,
           pt_weight = pt_model_dict[f"{pt_block_name}.mlp.fc2.weight"],
-          pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc2.bias"]
+          #pt_bias = pt_model_dict[f"{pt_block_name}.mlp.fc2.bias"]
       )
-      #block.mlp.fc2.bias = None
 
       # mlp act scale and bias
-      #block.mlp.act.scale.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.scale"]))
-      #block.mlp.act.bias.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.bias"]))
+      block.mlp.act.scale.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.scale"]))
+      block.mlp.act.bias.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.mlp.act.bias"]))
 
       # res_scale and layer_scale
       if (block.res_scale_1) is not None:
@@ -168,6 +162,7 @@ def modify_metaformer_stage(stage, stage_indx, pt_model_dict):
         block.res_scale_2.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.res_scale2.scale"]))
 
       if (block.layer_scale_1) is not None:
+
         block.layer_scale_1.assign(tf.Variable(pt_model_dict[f"{pt_block_name}.layer_scale1.scale"]))
 
       if (block.layer_scale_2) is not None:
@@ -182,12 +177,46 @@ def modify_metaformer_stage(stage, stage_indx, pt_model_dict):
           pt_bias = pt_model_dict[f"stages.{stage_indx}.downsample.conv.bias"]
       )
 
-     # block.norm = modify_tf_block(
-      #    tf_component = block.norm,
-       #   pt_weight = pt_model_dict[f"stages.{stage_indx}.downsample.norm.weight"],
-          #pt_bias = pt_model_dict[f"stages.{stage_indx}.downsample.norm.bias"]
-      #)
-     # block.norm.beta = None
+      block.norm = modify_tf_block(
+          tf_component = block.norm,
+          pt_weight = pt_model_dict[f"stages.{stage_indx}.downsample.norm.weight"],
+         # pt_bias = pt_model_dict[f"stages.{stage_indx}.downsample.norm.bias"]
+      )
+
+
+def modify_poolformerv2(tf_model, pt_model_dict):
+
+  # patch embed (stem) conv and norm
+  tf_model.layers[0].conv = modify_tf_block(
+            tf_component = tf_model.layers[0].conv,
+            pt_weight = pt_model_dict["stem.conv.weight"],
+            pt_bias = pt_model_dict["stem.conv.bias"]
+        )
+
+  tf_model.layers[0].norm = modify_tf_block(
+            tf_component = tf_model.layers[0].norm,
+            pt_weight = pt_model_dict["stem.norm.weight"],
+            #pt_bias = pt_model_dict["stem.conv.bias"]
+        )
+
+  # main norm
+  tf_model.layers[-3] = modify_tf_block(
+            tf_component = tf_model.layers[-3],
+            pt_weight = pt_model_dict["head.norm.weight"],
+            pt_bias = pt_model_dict["head.norm.bias"]
+        )
+
+  # head
+  tf_model.layers[-1] = modify_tf_block(
+            tf_component = tf_model.layers[-1],
+            pt_weight = pt_model_dict["head.fc.weight"],
+            pt_bias = pt_model_dict["head.fc.bias"]
+        )
+  
+  # modify poolformerv2 stages
+  for idx, stage in enumerate(tf_model.layers[1: 1+4]):
+    modify_poolformerv2_stage(stage, idx, pt_model_dict)
+
 
 
 def make_model_res_file(fpath):
