@@ -50,9 +50,11 @@ class MetaFormer(tf.keras.Model):
             norm_layers="group_norm_1grp",
             output_norm="layer_norm",
             include_top=True,
+            use_mlp_head=False,
+            nchws=[True, True, True, True],
             **kwargs,
     ):
-        super(MetaFormer, self).__init__(**kwargs)
+        super().__init__()
         self.num_classes = num_classes
         self.num_features = dims[-1]
         self.drop_rate = drop_rate
@@ -88,7 +90,7 @@ class MetaFormer(tf.keras.Model):
         dp_rates = np.split(dpr, np.cumsum(depths))
 
         for i in range(self.num_stages):
-            stages += [PoolFormerStage(
+            stages += [MetaFormerStage(
                 prev_dim,
                 dims[i],
                 depth=depths[i],
@@ -101,6 +103,7 @@ class MetaFormer(tf.keras.Model):
                 res_scale_init_value=res_scale_init_values[i],
                 downsample_norm=downsample_norm,
                 norm_layer=norm_layers[i],
+                use_nchw=nchws[i],
                 name = f"stage_{i}",
                 **kwargs,
             )]
@@ -111,13 +114,16 @@ class MetaFormer(tf.keras.Model):
 
         # remaining layers
         self.norm = output_norm(name="main_norm")
-        if self.include_top:
-          self.pool = tf.keras.layers.GlobalAveragePooling2D()
+        self.pool = tf.keras.layers.GlobalAveragePooling2D()
+        if self.include_top and not use_mlp_head:
           self.head = (
               tf.keras.layers.Dense(units=num_classes, name="classification_head")
               if num_classes > 0
               else tf.keras.layers.Activation("linear")  # Identity layer
-          )   
+          )
+
+        if self.include_top and use_mlp_head:
+          self.head = MlpHead(dim=dims[-1], num_classes=num_classes, name="classification_head")
 
     def forward_head(self, x, include_top: bool = True):
         x = self.norm(x)
