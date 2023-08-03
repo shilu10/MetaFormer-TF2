@@ -1,6 +1,7 @@
 from tensorflow import keras
 import tensorflow as tf
 import numpy as np
+from .factory import act_layer_factory, norm_layer_factory
 
 
 class SepConv(tf.keras.layers.Layer):

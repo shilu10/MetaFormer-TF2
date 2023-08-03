@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow import keras 
 import numpy as np 
 from typing import * 
+from .factory import act_layer_factory, norm_layer_factory
 
 
 class Attention(tf.keras.layers.Layer):

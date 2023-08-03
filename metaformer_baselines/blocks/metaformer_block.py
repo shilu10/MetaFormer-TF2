@@ -1,6 +1,6 @@
 import tensorflow as tf 
 import numpy as np 
-from ..layers import DropPath, ConvMLP
+from ..layers import DropPath, ConvMLP, MLP
 from ..layers import norm_layer_factory, act_layer_factory
 
 
