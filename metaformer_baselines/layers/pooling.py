@@ -7,7 +7,9 @@ class Pooling(tf.keras.layers.Layer):
     Implementation of pooling for PoolFormer: https://arxiv.org/abs/2111.11418
     """
 
-    def __init__(self, pool_size=3, **kwargs):
+    def __init__(self, projection_dim=None, pool_size=(3, 3), 
+                                    num_tokens=None, **kwargs):
+                                    
         super(Pooling, self).__init__(**kwargs)
         self.pool_size = pool_size
         self.pool = tf.keras.layers.AveragePooling2D(
