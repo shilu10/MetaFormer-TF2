@@ -404,6 +404,19 @@ def modify_conv_ca__stage(stage, stage_indx, pt_model_dict):
           #pt_bias = pt_model_dict[f"{pt_block_name}.norm2.bias"]
         )
 
+      if isinstance(block.token_mixer, Attention):
+        # qkv vector
+        block.token_mixer.qkv = modify_tf_block(
+            block.token_mixer.qkv,
+            pt_model_dict[f"{pt_block_name}.token_mixer.qkv.weight"]
+        )
+
+        # attn projection
+        block.token_mixer.proj = modify_tf_block(
+            block.token_mixer.proj,
+            pt_model_dict[f"{pt_block_name}.token_mixer.proj.weight"]
+        )
+
       block_indx += 1
 
     if isinstance(block, Downsampling):
@@ -462,7 +475,6 @@ def modify_conv_ca_former(tf_model, pt_model_dict):
             pt_bias = pt_model_dict["head.fc.norm.bias"]
         )
   
-
   # modify conv and ca stages
   for idx, stage in enumerate(tf_model.layers[1: 1+4]):
     modify_conv_ca__stage(stage, idx, pt_model_dict)
