@@ -1,0 +1,13 @@
+model_type: identityformer_m48
+depths: [8, 8, 24, 8]
+dims: [96, 192, 384, 768]
+use_mlp_head: false 
+mlp_bias: false
+token_mixer: identity
+block_norm: layer_norm
+main_norm: layer_norm
+downsample_norm: layer_norm
+layer_scale_init_values: null
+res_scale_init_values: [null, null, 1.0, 1.0]
+mlp_act: star_relu
+
