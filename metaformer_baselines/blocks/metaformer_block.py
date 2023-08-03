@@ -5,14 +5,15 @@ from ..layers import norm_layer_factory, act_layer_factory
 
 
 
-class MetaFormerBlock(tf.keras.layers.Layer): 
+class MetaFormerBlock(tf.keras.layers.Layer):
     """
     Implementation of one MetaFormer block.
     """
+
     def __init__(
             self,
             projection_dims,
-            token_mixer=tf.identity,
+            token_mixer=Pooling,
             mlp_act="gelu",
             mlp_bias=False,
             norm_layer="layer_norm",
@@ -30,19 +31,30 @@ class MetaFormerBlock(tf.keras.layers.Layer):
         norm_layer = norm_layer_factory(norm_layer)
 
         self.norm1 = norm_layer(name="norm1")
-        self.token_mixer = token_mixer()
+        self.token_mixer = token_mixer(projection_dim=projection_dims) if not token_mixer == tf.identity else token_mixer
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else tf.identity
         self.layer_scale_1 = None
         self.res_scale_1 = None
 
         self.norm2 = norm_layer(name="norm2")
-        self.mlp = ConvMLP(
-            int(4 * projection_dims),
-            projection_dims,
-            act_layer=mlp_act,
-            drop_rate=proj_drop,
-            mlp_bias = mlp_bias
-        )
+
+        if use_nchw:
+          self.mlp = ConvMLP(
+              int(4 * projection_dims),
+              projection_dims,
+              act_layer=mlp_act,
+              drop_rate=proj_drop,
+              mlp_bias = mlp_bias
+          )
+        else:
+          self.mlp = MLP(
+              int(4 * projection_dims),
+              projection_dims,
+              act_layer=mlp_act,
+              drop_rate=proj_drop,
+              mlp_bias = mlp_bias
+          )
+
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else tf.identity
         self.layer_scale_2 = None
         self.res_scale_2 = None
@@ -60,7 +72,6 @@ class MetaFormerBlock(tf.keras.layers.Layer):
           shortcut = (self.res_scale_1 * shortcut)
 
         x = shortcut + x
-
         shortcut = x
         x = self.norm2(x)
         x = self.mlp(x)
@@ -72,13 +83,13 @@ class MetaFormerBlock(tf.keras.layers.Layer):
         if self.res_scale_2 is not None:
           shortcut = (self.res_scale_2 * shortcut)
 
-        x = shortcut + x 
+        x = shortcut + x
 
         return x
 
     def build(self, input_shape):
 
-        if self.layer_scale_init_value:
+        if self.layer_scale_init_value is not None:
           self.layer_scale_1 = self.add_weight(
               shape=(self.projection_dims,),
               initializer=tf.keras.initializers.Constant(value=self.layer_scale_init_value),
@@ -92,7 +103,7 @@ class MetaFormerBlock(tf.keras.layers.Layer):
               name="layer_scale_2",
           )
 
-        if self.res_scale_init_value:
+        if self.res_scale_init_value is not None:
           self.res_scale_1 = self.add_weight(
               shape=(self.projection_dims,),
               initializer=tf.keras.initializers.Constant(value=self.res_scale_init_value),
