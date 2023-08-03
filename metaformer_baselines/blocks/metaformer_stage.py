@@ -20,14 +20,12 @@ class MetaFormerStage(tf.keras.Model):
             dp_rates=[0.] * 2,
             layer_scale_init_value=None,
             res_scale_init_value=None,
+            use_nchw=False,
             **kwargs,
     ):
         super(MetaFormerStage, self).__init__(**kwargs)
 
-        #self.grad_checkpointing = False
-        self.use_nchw = True
-        self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.use_nchw = use_nchw
 
         # don't downsample if in_chs and out_chs are the same
         self.downsample = tf.identity if in_chs == out_chs else Downsampling(
@@ -52,20 +50,20 @@ class MetaFormerStage(tf.keras.Model):
             name = f"block_{i}"
         ) for i in range(depth)])
 
-
     def call(self, x):
         x = self.downsample(x)
         B, H, W, C = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
 
         if not self.use_nchw:
-            x = x.reshape(B, C, -1).transpose(1, 2)
+            #x = tf.reshape(x, ( B, C, -1))
+            #x = tf.transpose(x, perm=(0, 2, 1))
+            x = tf.reshape(x, (-1, H*W, C))
 
-        else:
-          for block in self.blocks:
-            x = block(x)
+        for block in self.blocks:
+          x = block(x)
 
         if not self.use_nchw:
-            x = x.transpose(1, 2).reshape(B, C, H, W)
+            x = tf.reshape(tf.transpose(x, perm=(0, 1, 2)), (-1, H, W, C))
 
         return x
 
