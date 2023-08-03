@@ -470,7 +470,7 @@ def get_pt_model_dict(model_type):
   else: 
     pt_model = timm.create_model(
       model_name = model_type,
-      pretrained = True 
+      pretrained = True,
       num_classes = 1000
     )
     pt_model.eval()
@@ -513,7 +513,7 @@ urls = {
 token_mixer_dict = {
   "pooling": Pooling,
   "identity": tf.identity,
-  "random_mixer": [tf.identity, tf.identity, RandomMixing, partial(RandomMixing, num_tokens=49)]
+  "random_mixer": [tf.identity, tf.identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
   "sepconv": SepConv,
-  "ca": [SepConv, SepConv, Attention, Attention]
+  "ca": [SepConv, SepConv, Attention, Attention],
 }
