@@ -1,7 +1,8 @@
 from .utils import modify_tf_block
-from .poolformer.model import MetaFormer
-from .poolformer.layers import *
-from .poolformer.blocks import *
+from .utils import *
+from .metaformer_baselines.model import MetaFormer
+from .metaformer_baselines.layers import *
+from .metaformer_baselines.blocks import *
 import numpy as np 
 import os, sys, shutil
 import tqdm 
@@ -15,9 +16,11 @@ from typing import Dict, List
 import yaml 
 from imutils import paths
 import torch
+from .metaformer_baselines.layers import Pooling, SepConv, Attention, RandomMixing
+from functools import partial
 
 
-def port_weights(model_type="poolformer_s12", 
+def port_weights(model_type="poolformerv2_s12", 
                 model_savepath =".", 
                 include_top=True,
                 model_main_res_fname="main_result.csv"
@@ -29,15 +32,9 @@ def port_weights(model_type="poolformer_s12",
     config_file_path = f"configs/{model_type}.yaml"
     with open(config_file_path, "r") as f:
         data = yaml.safe_load(f)
-    
-    layer_scale_init_values = data.get("layer_scale_init_values")
-    res_scale_init_values = data.get("res_scale_init_values")
 
-    layer_scale_init_values = (float(layer_scale_init_values) 
-                            if isinstance(layer_scale_init_values, str) else layer_scale_init_values)
-
-    res_scale_init_values = (float(res_scale_init_values) 
-                            if isinstance(res_scale_init_values, str) else res_scale_init_values)
+    layer_scale_init_values = None
+    res_scale_init_values = [None, None, 1.0, 1.0]
 
     tf_model = MetaFormer(
         depths = data.get('depths'),
@@ -50,6 +47,9 @@ def port_weights(model_type="poolformer_s12",
         include_top = include_top,
         mlp_bias = data.get("mlp_bias"),
         mlp_act = data.get("mlp_act"),
+        use_mlp_head = data.get("use_mlp_head"),
+        nchws = [True, True, True, True] if "caformer" not in model_type else [True, True, False, False],
+        token_mixer = token_mixer_dict.get(data.get('token_mixer'))
     )
 
     dummy_input = np.zeros((1, 224, 224, 3))
@@ -69,46 +69,23 @@ def port_weights(model_type="poolformer_s12",
     add_model_res(model_main_res_fname, model_type, nb_params)
 
     print('Loading the Pytorch model!!!')
-    #pt_model = SwinForImageClassification.from_pretrained(f"microsoft/{model_type.replace('_', '-')}")
-    #pt_model.eval()
 
     # pt_model_dict
-    pt_model = timm.create_model(
-            model_name = model_type,
-            pretrained = True,
-            num_classes = 1000
-        )
+    pt_model_dict = get_pt_model_dict(model_type)
 
-    pt_model.eval()
-    pt_model_dict = pt_model.state_dict()
-    pt_model_dict = {k: np.array(pt_model_dict[k]) for k in pt_model_dict.keys()}
+    # port weights
+    if "poolformerv2" in model_type:
+      modify_poolformerv2(tf_model, pt_model_dict, include_top)
 
-    # main norm
-    tf_model.layers[-3] = modify_tf_block(
-          tf_component = tf_model.layers[-3],
-          pt_weight = pt_model_dict["head.norm.weight"],
-          pt_bias = pt_model_dict["head.norm.bias"]
-      )
+    elif "randformer" in model_type:
+      modify_identity_rand_former(tf_model, pt_model_dict, include_top)
 
-    # patch embed layer's projection
-   
-    tf_model.layers[0].conv = modify_tf_block(
-          tf_component = tf_model.layers[0].conv,
-          pt_weight = pt_model_dict["stem.conv.weight"],
-          pt_bias = pt_model_dict["stem.conv.bias"]
-      )
+    elif "identityformer" in model_type:
+      modify_identity_rand_former(tf_model, pt_model_dict, include_top)
 
-    if include_top:
-      # classification layer
-      tf_model.layers[-1] = modify_tf_block(
-          tf_component = tf_model.layers[-1],
-          pt_weight = pt_model_dict["head.fc.weight"],
-          pt_bias = pt_model_dict["head.fc.bias"]
-      )
+    else:
+      modify_conv_ca_former(tf_model, pt_model_dict, include_top)
 
-    # for poolformer layers
-    for idx, stage in enumerate(tf_model.layers[1: 1+len(data.get("depths"))]):
-        modify_metaformer_stage(stage, idx, pt_model_dict)
     
     save_path = os.path.join(model_savepath, model_type)
     save_path = f"{save_path}_fe" if not include_top else save_path
@@ -258,8 +235,7 @@ def modify_identity_rand_former_stage(stage, stage_indx, pt_model_dict):
       )
 
 
-
-def modify_poolformerv2(tf_model, pt_model_dict):
+def modify_poolformerv2(tf_model, pt_model_dict, include_top):
 
   # patch embed (stem) conv and norm
   tf_model.layers[0].conv = modify_tf_block(
@@ -282,18 +258,19 @@ def modify_poolformerv2(tf_model, pt_model_dict):
         )
 
   # head
-  tf_model.layers[-1] = modify_tf_block(
-            tf_component = tf_model.layers[-1],
-            pt_weight = pt_model_dict["head.fc.weight"],
-            pt_bias = pt_model_dict["head.fc.bias"]
-        )
+  if include_top:
+    tf_model.layers[-1] = modify_tf_block(
+              tf_component = tf_model.layers[-1],
+              pt_weight = pt_model_dict["head.fc.weight"],
+              pt_bias = pt_model_dict["head.fc.bias"]
+          )
   
   # modify poolformerv2 stages
   for idx, stage in enumerate(tf_model.layers[1: 1+4]):
     modify_poolformerv2_stage(stage, idx, pt_model_dict)
 
 
-def modify_identity_rand_former(tf_model, pt_model_dict):
+def modify_identity_rand_former(tf_model, pt_model_dict, include_top):
   # patch embed (stem) conv and norm
 
   tf_model.layers[0].conv = modify_tf_block(
@@ -314,13 +291,14 @@ def modify_identity_rand_former(tf_model, pt_model_dict):
             pt_weight = pt_model_dict["norm.weight"],
             pt_bias = pt_model_dict["norm.bias"]
         )
-
+  
   # head
-  tf_model.layers[-1] = modify_tf_block(
-            tf_component = tf_model.layers[-1],
-            pt_weight = pt_model_dict["head.weight"],
-            pt_bias = pt_model_dict["head.bias"]
-        )
+  if include_top:
+    tf_model.layers[-1] = modify_tf_block(
+              tf_component = tf_model.layers[-1],
+              pt_weight = pt_model_dict["head.weight"],
+              pt_bias = pt_model_dict["head.bias"]
+          )
   
   # modify identity and rand former stages
   for idx, stage in enumerate(tf_model.layers[1: 1+4]):
@@ -433,7 +411,7 @@ def modify_conv_ca__stage(stage, stage_indx, pt_model_dict):
       )
 
 
-def modify_conv_ca_former(tf_model, pt_model_dict):
+def modify_conv_ca_former(tf_model, pt_model_dict, include_top):
 
   # stem layer
   tf_model.layers[0].conv = modify_tf_block(
@@ -456,28 +434,50 @@ def modify_conv_ca_former(tf_model, pt_model_dict):
         )
 
   # headfc1
-  tf_model.layers[-1].fc1 = modify_tf_block(
-            tf_component = tf_model.layers[-1].fc1,
-            pt_weight = pt_model_dict["head.fc.fc1.weight"],
-            pt_bias = pt_model_dict["head.fc.fc1.bias"]
-        )
+  if include_top
+    tf_model.layers[-1].fc1 = modify_tf_block(
+              tf_component = tf_model.layers[-1].fc1,
+              pt_weight = pt_model_dict["head.fc.fc1.weight"],
+              pt_bias = pt_model_dict["head.fc.fc1.bias"]
+          )
 
-  tf_model.layers[-1].fc2 = modify_tf_block(
-            tf_component = tf_model.layers[-1].fc2,
-            pt_weight = pt_model_dict["head.fc.fc2.weight"],
-            pt_bias = pt_model_dict["head.fc.fc2.bias"]
-        )
+    tf_model.layers[-1].fc2 = modify_tf_block(
+              tf_component = tf_model.layers[-1].fc2,
+              pt_weight = pt_model_dict["head.fc.fc2.weight"],
+              pt_bias = pt_model_dict["head.fc.fc2.bias"]
+          )
 
-  # head-norm
-  tf_model.layers[-1].norm = modify_tf_block(
-            tf_component = tf_model.layers[-1].norm,
-            pt_weight = pt_model_dict["head.fc.norm.weight"],
-            pt_bias = pt_model_dict["head.fc.norm.bias"]
-        )
+    # head-norm
+    tf_model.layers[-1].norm = modify_tf_block(
+              tf_component = tf_model.layers[-1].norm,
+              pt_weight = pt_model_dict["head.fc.norm.weight"],
+              pt_bias = pt_model_dict["head.fc.norm.bias"]
+          )
   
   # modify conv and ca stages
   for idx, stage in enumerate(tf_model.layers[1: 1+4]):
     modify_conv_ca__stage(stage, idx, pt_model_dict)
+
+
+def get_pt_model_dict(model_type):
+  if "rand" in model_type or "identity" in model_type:
+    weight_dict = torch.hub.load_state_dict_from_url(url=urls["model_type"], 
+                                                    map_location="cpu", 
+                                                    check_hash=True
+                                                  )
+    pt_model_dict = {k: np.array(weight_dict[k]) for k in weight_dict.keys()}
+
+  else: 
+    pt_model = timm.create_model(
+      model_name = model_type,
+      pretrained = True 
+      num_classes = 1000
+    )
+    pt_model.eval()
+    pt_model_dict = pt_model.state_dict()
+    pt_model_dict = {k: np.array(pt_model_dict[k]) for k in pt_model_dict.keys()}
+  
+  return pt_model_dict
 
 
 def make_model_res_file(fpath):
@@ -492,4 +492,28 @@ def add_model_res(fpath, model_variant, params):
 
 def convert_kb_to_gb(val):
   gb_val = val / 1000 / 1000 / 1000
-  return gb_val     
+  return gb_val  
+
+
+urls = {
+  'randformer_s12': 'https://huggingface.co/sail/dl/resolve/main/randformer/randformer_s12.pth',
+  'randformer_s24': 'https://huggingface.co/sail/dl/resolve/main/randformer/randformer_s24.pth',
+  'randformer_s36': 'https://huggingface.co/sail/dl/resolve/main/randformer/randformer_s36.pth',
+  'randformer_m36': 'https://huggingface.co/sail/dl/resolve/main/randformer/randformer_m36.pth',
+  'randformer_m48': 'https://huggingface.co/sail/dl/resolve/main/randformer/randformer_m48.pth',
+
+  'identityformer_s12': 'https://huggingface.co/sail/dl/resolve/main/identityformer/identityformer_s12.pth',
+  'identityformer_s24': 'https://huggingface.co/sail/dl/resolve/main/identityformer/identityformer_s24.pth',
+  'identityformer_s36': 'https://huggingface.co/sail/dl/resolve/main/identityformer/identityformer_s36.pth',
+  'identityformer_m36': 'https://huggingface.co/sail/dl/resolve/main/identityformer/identityformer_m36.pth',
+  'identityformer_m48': 'https://huggingface.co/sail/dl/resolve/main/identityformer/identityformer_m48.pth',
+}   
+
+
+token_mixer_dict = {
+  "pooling": Pooling,
+  "identity": tf.identity,
+  "random_mixer": [tf.identity, tf.identity, RandomMixing, partial(RandomMixing, num_tokens=49)]
+  "sepconv": SepConv,
+  "ca": [SepConv, SepConv, Attention, Attention]
+}
