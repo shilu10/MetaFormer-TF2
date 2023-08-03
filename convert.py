@@ -434,7 +434,7 @@ def modify_conv_ca_former(tf_model, pt_model_dict, include_top):
         )
 
   # headfc1
-  if include_top
+  if include_top:
     tf_model.layers[-1].fc1 = modify_tf_block(
               tf_component = tf_model.layers[-1].fc1,
               pt_weight = pt_model_dict["head.fc.fc1.weight"],
