@@ -60,6 +60,6 @@ class SepConv(tf.keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config["projection_dim"] = projection_dim
+        config["projection_dim"] = self.projection_dim
 
         return config
