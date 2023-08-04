@@ -95,8 +95,8 @@ class MetaFormer(tf.keras.Model):
         for i in range(self.num_stages):
             print(token_mixers[i])
             stages += [MetaFormerStage(
-                prev_dim,
-                dims[i],
+                in_chs=prev_dim,
+                out_chs=dims[i],
                 depth=depths[i],
                 token_mixer=token_mixers[i],
                 mlp_act=mlp_act,
