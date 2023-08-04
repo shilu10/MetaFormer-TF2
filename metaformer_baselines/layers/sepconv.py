@@ -58,8 +58,8 @@ class SepConv(tf.keras.layers.Layer):
         x = self.pwconv2(x)
         return x
 
-    def get_config(self):
-        config = super().get_config()
-        config["projection_dim"] = self.projection_dim
+    #def get_config(self):
+     #   config = super().get_config()
+      #  config["projection_dim"] = self.projection_dim
 
-        return config
+       # return config
