@@ -1,6 +1,6 @@
 import tensorflow as tf 
 import numpy as np 
-
+from .factory import norm_layer_factory, act_layer_factory
 
 class Downsampling(tf.keras.layers.Layer):
     """
