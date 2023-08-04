@@ -76,6 +76,9 @@ class MetaFormer(tf.keras.Model):
         if not isinstance(res_scale_init_values, (list, tuple)):
             res_scale_init_values = [res_scale_init_values] * self.num_stages
 
+
+        print(token_mixers)
+
         # stages and stem layer
         self.feature_info = []
         self.stem = Stem(
