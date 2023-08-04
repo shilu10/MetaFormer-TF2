@@ -109,7 +109,6 @@ class MetaFormer(tf.keras.Model):
                 norm_layer=norm_layers[i],
                 use_nchw=nchws[i],
                 name = f"stage_{i}",
-                **kwargs,
             )]
             prev_dim = dims[i]
             self.feature_info += [dict(num_chs=dims[i], reduction=2, module=f'stages.{i}')]
