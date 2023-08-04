@@ -24,7 +24,8 @@ class MetaFormerStage(tf.keras.Model):
             **kwargs,
     ):
         super(MetaFormerStage, self).__init__(**kwargs)
-
+        self.in_chs = in_chs
+        self.out_chs = out_chs
         self.use_nchw = use_nchw
 
         # don't downsample if in_chs and out_chs are the same
