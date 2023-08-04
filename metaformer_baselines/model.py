@@ -76,9 +76,6 @@ class MetaFormer(tf.keras.Model):
         if not isinstance(res_scale_init_values, (list, tuple)):
             res_scale_init_values = [res_scale_init_values] * self.num_stages
 
-
-        print(token_mixers)
-
         # stages and stem layer
         self.feature_info = []
         self.stem = Stem(
@@ -93,7 +90,6 @@ class MetaFormer(tf.keras.Model):
         dp_rates = np.split(dpr, np.cumsum(depths))
 
         for i in range(self.num_stages):
-            print(token_mixers[i])
             stages += [MetaFormerStage(
                 in_chs=prev_dim,
                 out_chs=dims[i],
@@ -109,6 +105,7 @@ class MetaFormer(tf.keras.Model):
                 norm_layer=norm_layers[i],
                 use_nchw=nchws[i],
                 name = f"stage_{i}",
+                **kwargs,
             )]
             prev_dim = dims[i]
             self.feature_info += [dict(num_chs=dims[i], reduction=2, module=f'stages.{i}')]

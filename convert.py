@@ -49,7 +49,7 @@ def port_weights(model_type="poolformerv2_s12",
         mlp_act = data.get("mlp_act"),
         use_mlp_head = data.get("use_mlp_head"),
         nchws = [True, True, True, True] if "caformer" not in model_type else [True, True, False, False],
-        token_mixer = token_mixer_dict.get(data.get('token_mixer'))
+        token_mixers = token_mixer_dict.get(data.get('token_mixer'))
     )
 
     dummy_input = np.zeros((1, 224, 224, 3))
