@@ -91,7 +91,7 @@ def port_weights(model_type="poolformerv2_s12",
     save_path = f"{save_path}_fe" if not include_top else save_path
     tf_model.save(save_path)
     
-    print(f"TensorFlow model serialized at: {save_path}...")
+    print(f"TensorFlow model serialized at: {save_path}...\n")
 
 
 def modify_poolformerv2_stage(stage, stage_indx, pt_model_dict):
@@ -461,7 +461,7 @@ def modify_conv_ca_former(tf_model, pt_model_dict, include_top):
 
 def get_pt_model_dict(model_type):
   if "rand" in model_type or "identity" in model_type:
-    weight_dict = torch.hub.load_state_dict_from_url(url=urls["model_type"], 
+    weight_dict = torch.hub.load_state_dict_from_url(url=urls[f"{model_type}"], 
                                                     map_location="cpu", 
                                                     check_hash=True
                                                   )
