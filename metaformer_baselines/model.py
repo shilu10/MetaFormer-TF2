@@ -98,7 +98,7 @@ class MetaFormer(tf.keras.Model):
                 prev_dim,
                 dims[i],
                 depth=depths[i],
-                #token_mixer=token_mixers[i],
+                token_mixer=token_mixers[i],
                 mlp_act=mlp_act,
                 mlp_bias=mlp_bias,
                 proj_drop=proj_drop_rate,
