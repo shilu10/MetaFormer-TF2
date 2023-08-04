@@ -93,11 +93,12 @@ class MetaFormer(tf.keras.Model):
         dp_rates = np.split(dpr, np.cumsum(depths))
 
         for i in range(self.num_stages):
+            print(token_mixers[i])
             stages += [MetaFormerStage(
                 prev_dim,
                 dims[i],
                 depth=depths[i],
-                token_mixer=token_mixers[i],
+                #token_mixer=token_mixers[i],
                 mlp_act=mlp_act,
                 mlp_bias=mlp_bias,
                 proj_drop=proj_drop_rate,
